@@ -152,9 +152,7 @@
     },
     _prepareTiles: function(callback) {
       logger.info("[Portals] Prepared " + Tile.length + " tiles");
-      return Database.db.collection('Tiles').ensureIndex({
-        status: 1
-      }, function() {
+      return Database.db.collection('Tiles').ensureIndex([['status', 1]], false, function() {
         var bounds, tileId, _ref;
         _ref = Tile.bounds;
         for (tileId in _ref) {
