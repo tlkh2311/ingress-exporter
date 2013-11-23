@@ -1,5 +1,5 @@
 (function() {
-  var STATUS_COMPLETE, STATUS_FAIL, STATUS_PANIC, STATUS_PENDING, STATUS_REQUESTING, STATUS_TIMEOUT, Tile, TileBucket, async, checkTimeoutAndFailTiles, failTiles, panicTiles, processErrorTileResponse, processSuccessTileResponse, request_done, request_max, timeoutTiles;
+  var STATUS_COMPLETE, STATUS_FAIL, STATUS_PANIC, STATUS_PENDING, STATUS_REQUESTING, STATUS_TIMEOUT, Tile, TileBucket, async, checkTimeoutAndFailTiles, failTiles, panicTiles, processErrorTileResponse, processSuccessTileResponse, timeoutTiles;
 
   async = require('async');
 
@@ -20,10 +20,6 @@
   STATUS_PANIC = 4;
 
   STATUS_COMPLETE = 5;
-
-  request_max = 0;
-
-  request_done = 0;
 
   TileBucket = GLOBAL.TileBucket = {
     bucket: [],
@@ -69,7 +65,6 @@
           upsert: true
         }, callback);
       }, function(err) {
-        request_max++;
         Request.add({
           action: 'getThinnedEntitiesV4',
           data: data,
@@ -82,8 +77,7 @@
           },
           afterResponse: function() {
             checkTimeoutAndFailTiles();
-            request_done++;
-            logger.info("[Portals] " + Math.round(request_done / request_max * 100).toString() + ("%\t[" + request_done + "/" + request_max + "]") + ("\t" + Entity.counter.portals + " portals, " + Entity.counter.links + " links, " + Entity.counter.fields + " fields"));
+            logger.info("[Portals] " + Math.round(Request.requested / Request.maxRequest * 100).toString() + ("%\t[" + Request.requested + "/" + Request.maxRequest + "]") + ("\t" + Entity.counter.portals + " portals, " + Entity.counter.links + " links, " + Entity.counter.fields + " fields"));
             return TaskManager.end('TileBucket.Request.afterResponseCallback');
           },
           beforeRequest: function() {

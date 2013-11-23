@@ -21,6 +21,8 @@ Entity = GLOBAL.Entity =
 
         Entity.entityCount++
 
+        callback = callback || noop
+
         if data.portalV2?
             createPortalEntity.apply this, arguments
         else if data.capturedRegion?
@@ -29,7 +31,7 @@ Entity = GLOBAL.Entity =
             createLinkEntity.apply this, arguments
         else
             logger.warn 'Unknown entity type, id=' + id
-            callback && callback()
+            callback()
 
 createEntity = (collection, id, timestamp, data, callback) ->
 
@@ -63,7 +65,7 @@ createPortalEntity = (id, timestamp, data, callback) ->
                 Agent.resolved resonator.ownerGuid,
                     level: resonator.level
 
-        callback && callback()
+        callback()
 
 createFieldEntity = (id, timestamp, data, callback) ->
 
