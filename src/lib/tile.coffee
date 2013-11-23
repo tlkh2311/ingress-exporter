@@ -45,7 +45,32 @@ TileBucket = GLOBAL.TileBucket =
 
         data = quadKeys: tileList
 
-        TaskManager.begin()
+        # add to queue first, then update database, then send it
+        delayObject = Request.add
+
+            action: 'getThinnedEntitiesV4'
+            data:   data
+            onSuccess: (response) ->
+
+                processSuccessTileResponse response, tileIds
+
+            onError: (err) ->
+
+                logger.error "[Portals] " + err
+                processErrorTileResponse tileIds, noop
+
+            afterResponse: ->
+
+                checkTimeoutAndFailTiles()
+
+                logger.info "[Portals] " +
+                    Math.round(Request.requested / Request.maxRequest * 100).toString() +
+                    "%\t[#{Request.requested}/#{Request.maxRequest}]" +
+                    "\t#{Entity.counter.portals} portals, #{Entity.counter.links} links, #{Entity.counter.fields} fields"
+
+            beforeRequest: ->
+
+                null
 
         # reset status in database
         async.eachLimit tileList, Config.Database.MaxParallel, (tileId, callback) ->
@@ -62,34 +87,8 @@ TileBucket = GLOBAL.TileBucket =
         , (err) ->
             # onFinish
 
-            Request.add
-
-                action: 'getThinnedEntitiesV4'
-                data:   data
-                onSuccess: (response) ->
-
-                    processSuccessTileResponse response, tileIds
-
-                onError: (err) ->
-
-                    logger.error "[Portals] " + err
-                    processErrorTileResponse tileIds, noop
-
-                afterResponse: ->
-
-                    checkTimeoutAndFailTiles()
-
-                    logger.info "[Portals] " +
-                        Math.round(Request.requested / Request.maxRequest * 100).toString() +
-                        "%\t[#{Request.requested}/#{Request.maxRequest}]" +
-                        "\t#{Entity.counter.portals} portals, #{Entity.counter.links} links, #{Entity.counter.fields} fields"
-
-                    TaskManager.end 'TileBucket.Request.afterResponseCallback'
-
-                beforeRequest: ->
-
-                    null
-
+            delayObject.schedule()
+            delayObject.schedule = null
             callback && callback()
 
 Tile = GLOBAL.Tile = 
@@ -131,8 +130,6 @@ Tile = GLOBAL.Tile =
 
         logger.info "[Portals] Querying #{tileBounds.length} tile status..."
 
-        TaskManager.begin()
-
         async.eachLimit tileBounds, Config.Database.MaxParallel, (bound, callback) ->
             # find this tile in the database
             Database.db.collection('Tiles').findOne
@@ -151,9 +148,7 @@ Tile = GLOBAL.Tile =
                     Tile.length++
                     Tile.bounds[bounds.id] = bounds
 
-            Tile._prepareTiles ->
-                callback()
-                TaskManager.end 'Tile.prepareFromDatabase.callback'
+            Tile._prepareTiles callback
 
     prepareNew: (callback) ->
 
@@ -185,6 +180,7 @@ Tile = GLOBAL.Tile =
 
         if Tile.length is 0
             logger.info "[Portals] Nothing to request"
+            exitProcess() if Request.queue.length() is 0
             return
 
         logger.info "[Portals] Begin requesting..."
@@ -253,8 +249,7 @@ processSuccessTileResponse = (response, tileIds) ->
 
         updater.$set.entityCount = entityCount if entityCount > 0
 
-        TaskManager.begin()
-        Database.db.collection('Tiles').update {_id:tileId}, updater, TaskManager.end
+        Database.db.collection('Tiles').update {_id:tileId}, updater, noop
 
 processErrorTileResponse = (tileIds, callback) ->
 

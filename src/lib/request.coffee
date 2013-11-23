@@ -30,6 +30,7 @@ Request = GLOBAL.Request =
             error:    options.onError
             request:  options.beforeRequest
             response: options.afterResponse
+            delayobj: {schedule: noop}
         }
 
     add: (options) ->
@@ -39,9 +40,9 @@ Request = GLOBAL.Request =
         Request.queue.push task
         Request.maxRequest++
 
-    post: (url, data, callback) ->
+        return task.delayobj
 
-        TaskManager.begin()
+    post: (url, data, callback) ->
 
         needle.post 'http://www.ingress.com' + url, JSON.stringify(data),
 
@@ -57,14 +58,9 @@ Request = GLOBAL.Request =
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/30.0.1599.101 Safari/537.36'
                 'X-CSRFToken': cookies.csrftoken
 
-        , ->
-
-            callback.apply this, arguments
-            TaskManager.end 'Request.post (url='+url+')'
+        , callback
 
     get: (url, callback) ->
-
-        TaskManager.begin()
 
         needle.get 'http://www.ingress.com' + url, 
 
@@ -79,10 +75,7 @@ Request = GLOBAL.Request =
                 'Referer': 'http://www.ingress.com/intel'
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/30.0.1599.101 Safari/537.36'
 
-        , ->
-
-            callback.apply this, arguments
-            TaskManager.end 'Request.get'
+        , callback
 
     processResponse: (error, response, body) ->
 
@@ -104,43 +97,46 @@ Request = GLOBAL.Request =
 
 Request.queue = async.queue (task, callback) ->
 
-    TaskManager.begin()
-
     Request.activeRequests++
-    Request.post '/r/' + task.m, task.d, (error, response, body) ->
 
-        if task.emitted?
-            console.warn '[DEBUG] Ignored reemitted event'
-            return
+    func = ->
 
-        task.emitted = true
+        Request.post '/r/' + task.m, task.d, (error, response, body) ->
 
-        Request.activeRequests--
-        Request.requested++
+            if task.emitted?
+                console.warn '[DEBUG] Ignored reemitted event'
+                return
 
-        if error
-            console.log error.stack
-            task.error && task.error error
-            task.response && task.response error
+            task.emitted = true
+
+            Request.activeRequests--
+            Request.requested++
+
+            if error
+                task.error && task.error error
+                task.response && task.response error
+                callback()
+                return
+
+            if not Request.processResponse error, response, body
+                logger.error '[DEBUG] Unknown server response'
+                callback()
+                return
+            
+            task.success && task.success body
+            task.response && task.response null
 
             callback()
-            TaskManager.end 'Request.queue.postCallback'
-            return
 
-        if not Request.processResponse error, response, body
-            logger.error '[DEBUG] Unknown server response'
-
-            callback()
-            TaskManager.end 'Request.queue.postCallback'
-            return
-        
-        task.success && task.success body
-        task.response && task.response null
-
-        callback()
-        TaskManager.end 'Request.queue.postCallback'
+    if task.delayobj.schedule is null   # finished before here
+        func()
+    else
+        task.delayobj.schedule = func   # task not finished: wait until callback
 
 , Config.Request.MaxParallel
+
+# all requests have done
+Request.queue.drain = exitProcess
 
 Request.maxRequest = 0
 Request.requested = 0

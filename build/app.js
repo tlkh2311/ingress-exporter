@@ -27,8 +27,6 @@
 
   require('./config.js');
 
-  require('./lib/taskmanager.js');
-
   require('./lib/leaflet.js');
 
   require('./lib/utils.js');
@@ -36,8 +34,6 @@
   require('./lib/database.js');
 
   require('./lib/request.js');
-
-  require('./lib/agent.js');
 
   require('./lib/tile.js');
 
@@ -51,31 +47,29 @@
 
   taskCount = 0;
 
-  TaskManager.begin();
-
   MungeDetector.detect(function() {
-    return Agent.initFromDatabase(function() {
-      if (argv["new"] || argv.n) {
-        if (argv.portals) {
-          Tile.prepareNew(Tile.start);
-          taskCount++;
-        }
-        if (argv.broadcasts) {
-          Chat.prepareNew(Chat.start);
-          taskCount++;
-        }
-      } else {
-        if (argv.portals) {
-          Tile.prepareFromDatabase(Tile.start);
-          taskCount++;
-        }
-        if (argv.broadcasts) {
-          Chat.prepareFromDatabase(Chat.start);
-          taskCount++;
-        }
+    if (argv["new"] || argv.n) {
+      if (argv.portals) {
+        Tile.prepareNew(Tile.start);
+        taskCount++;
       }
-      return TaskManager.end('AppMain.callback');
-    });
+      if (argv.broadcasts) {
+        Chat.prepareNew(Chat.start);
+        taskCount++;
+      }
+    } else {
+      if (argv.portals) {
+        Tile.prepareFromDatabase(Tile.start);
+        taskCount++;
+      }
+      if (argv.broadcasts) {
+        Chat.prepareFromDatabase(Chat.start);
+        taskCount++;
+      }
+    }
+    if (taskCount === 0) {
+      return process.exit(0);
+    }
   });
 
 }).call(this);

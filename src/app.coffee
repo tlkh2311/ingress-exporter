@@ -22,12 +22,10 @@ exitProcess = GLOBAL.exitProcess = ->
 
 require './config.js'
 
-require './lib/taskmanager.js'
 require './lib/leaflet.js'
 require './lib/utils.js'
 require './lib/database.js'
 require './lib/request.js'
-require './lib/agent.js'
 require './lib/tile.js'
 require './lib/entity.js'
 require './lib/chat.js'
@@ -39,27 +37,21 @@ argv = require('optimist').argv
 
 taskCount = 0
 
-TaskManager.begin()
-
 MungeDetector.detect ->
 
-    Agent.initFromDatabase ->
+    if argv.new or argv.n
+        if argv.portals
+            Tile.prepareNew Tile.start
+            taskCount++
+        if argv.broadcasts
+            Chat.prepareNew Chat.start
+            taskCount++
+    else
+        if argv.portals
+            Tile.prepareFromDatabase Tile.start
+            taskCount++
+        if argv.broadcasts
+            Chat.prepareFromDatabase Chat.start
+            taskCount++
 
-        if argv.new or argv.n
-            if argv.portals
-                Tile.prepareNew Tile.start
-                taskCount++
-            if argv.broadcasts
-                Chat.prepareNew Chat.start
-                taskCount++
-        else
-            if argv.portals
-                Tile.prepareFromDatabase Tile.start
-                taskCount++
-            if argv.broadcasts
-                Chat.prepareFromDatabase Chat.start
-                taskCount++
-
-        TaskManager.end 'AppMain.callback'
-
-    #process.exit 0 if taskCount is 0
+    process.exit 0 if taskCount is 0

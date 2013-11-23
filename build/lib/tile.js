@@ -36,7 +36,7 @@
       }
     },
     request: function(tileIds, callback) {
-      var data, requestId, tileId, tileList, _i, _len;
+      var data, delayObject, requestId, tileId, tileList, _i, _len;
       tileList = [];
       for (_i = 0, _len = tileIds.length; _i < _len; _i++) {
         tileId = tileIds[_i];
@@ -53,7 +53,24 @@
       data = {
         quadKeys: tileList
       };
-      TaskManager.begin();
+      delayObject = Request.add({
+        action: 'getThinnedEntitiesV4',
+        data: data,
+        onSuccess: function(response) {
+          return processSuccessTileResponse(response, tileIds);
+        },
+        onError: function(err) {
+          logger.error("[Portals] " + err);
+          return processErrorTileResponse(tileIds, noop);
+        },
+        afterResponse: function() {
+          checkTimeoutAndFailTiles();
+          return logger.info("[Portals] " + Math.round(Request.requested / Request.maxRequest * 100).toString() + ("%\t[" + Request.requested + "/" + Request.maxRequest + "]") + ("\t" + Entity.counter.portals + " portals, " + Entity.counter.links + " links, " + Entity.counter.fields + " fields"));
+        },
+        beforeRequest: function() {
+          return null;
+        }
+      });
       return async.eachLimit(tileList, Config.Database.MaxParallel, function(tileId, callback) {
         return Database.db.collection('Tiles').update({
           _id: tileId
@@ -65,25 +82,8 @@
           upsert: true
         }, callback);
       }, function(err) {
-        Request.add({
-          action: 'getThinnedEntitiesV4',
-          data: data,
-          onSuccess: function(response) {
-            return processSuccessTileResponse(response, tileIds);
-          },
-          onError: function(err) {
-            logger.error("[Portals] " + err);
-            return processErrorTileResponse(tileIds, noop);
-          },
-          afterResponse: function() {
-            checkTimeoutAndFailTiles();
-            logger.info("[Portals] " + Math.round(Request.requested / Request.maxRequest * 100).toString() + ("%\t[" + Request.requested + "/" + Request.maxRequest + "]") + ("\t" + Entity.counter.portals + " portals, " + Entity.counter.links + " links, " + Entity.counter.fields + " fields"));
-            return TaskManager.end('TileBucket.Request.afterResponseCallback');
-          },
-          beforeRequest: function() {
-            return null;
-          }
-        });
+        delayObject.schedule();
+        delayObject.schedule = null;
         return callback && callback();
       });
     }
@@ -117,7 +117,6 @@
       tileBounds = Tile.calculateBounds();
       completedBounds = {};
       logger.info("[Portals] Querying " + tileBounds.length + " tile status...");
-      TaskManager.begin();
       return async.eachLimit(tileBounds, Config.Database.MaxParallel, function(bound, callback) {
         return Database.db.collection('Tiles').findOne({
           _id: bound.id,
@@ -137,10 +136,7 @@
             Tile.bounds[bounds.id] = bounds;
           }
         }
-        return Tile._prepareTiles(function() {
-          callback();
-          return TaskManager.end('Tile.prepareFromDatabase.callback');
-        });
+        return Tile._prepareTiles(callback);
       });
     },
     prepareNew: function(callback) {
@@ -176,6 +172,9 @@
       var req, tileBounds, tileId, _ref;
       if (Tile.length === 0) {
         logger.info("[Portals] Nothing to request");
+        if (Request.queue.length() === 0) {
+          exitProcess();
+        }
         return;
       }
       logger.info("[Portals] Begin requesting...");
@@ -241,10 +240,9 @@
       if (entityCount > 0) {
         updater.$set.entityCount = entityCount;
       }
-      TaskManager.begin();
       _results.push(Database.db.collection('Tiles').update({
         _id: tileId
-      }, updater, TaskManager.end));
+      }, updater, noop));
     }
     return _results;
   };

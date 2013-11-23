@@ -12,7 +12,6 @@
 
   MungeDetector = GLOBAL.MungeDetector = {
     detect: function(callback) {
-      TaskManager.begin();
       return async.series([
         function(callback) {
           return Database.db.collection('MungeData').findOne({
@@ -81,15 +80,12 @@
             }, function(err) {
               logger.info('[MungeDetector] Munge data saved.');
               callback && callback();
-              TaskManager.end('MungeDetector.detect');
             });
           } else {
             callback && callback();
-            TaskManager.end('MungeDetector.detect');
           }
         } else {
           logger.error('[MungeDetector] Could not detect munge data. Tasks are terminated.');
-          TaskManager.end('MungeDetector.detect');
           return process.exit(0);
         }
       });
