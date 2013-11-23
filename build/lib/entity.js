@@ -53,17 +53,13 @@
     return createEntity('Portals', id, timestamp, data, function() {
       var resonator, _i, _len, _ref;
       if (data.captured != null) {
-        if (!Utils.isSystemPlayer(data.captured.capturingPlayerId)) {
-          Agent.resolve(data.captured.capturingPlayerId);
-        }
+        Agent.resolve(data.captured.capturingPlayerId);
         _ref = data.resonatorArray.resonators;
         for (_i = 0, _len = _ref.length; _i < _len; _i++) {
           resonator = _ref[_i];
-          if (!Utils.isSystemPlayer(resonator.ownerGuid)) {
-            Agent.resolved(resonator.ownerGuid, {
-              level: resonator.level
-            });
-          }
+          Agent.resolved(resonator.ownerGuid, {
+            level: resonator.level
+          });
         }
       }
       return callback && callback();
