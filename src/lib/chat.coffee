@@ -243,7 +243,37 @@ parseChatResponse = (taskId, response, callback) ->
 
 dbQueue = async.queue (task, callback) ->
 
-    task callback
+    doc = task.data
+    doc._id = task.id
+    doc.time = task.timestamp
+
+    async.series [
+
+        (callback) ->
+        
+            Database.db.collection('Chat').insert doc, callback
+
+        , (callback) ->
+
+            # resove player names
+            if doc.markup.PLAYER1?
+
+                level = null
+
+                if doc.markup.TEXT1.plain is ' deployed an '
+                    level = parseInt doc.markup.TEXT2.plain.substr(1)
+
+                Agent.resolved doc.markup.PLAYER1.guid,
+                    name:  doc.markup.PLAYER1.plain
+                    team:  Agent.strToTeam(doc.markup.PLAYER1.team)
+                    level: level
+
+            callback()
+            
+    ], ->
+
+        callback()
+        TaskManager.end 'dbQueue.queue.callback'
 
 , Config.Database.MaxParallel
 
@@ -270,36 +300,7 @@ insertMessage = (id, timestamp, data) ->
 
     data2.markup = markup
 
-    dbQueue.push (callback) ->
-
-        doc = data2
-        doc._id = id
-        doc.time = timestamp
-
-        async.series [
-
-            (callback) ->
-            
-                Database.db.collection('Chat').insert doc, callback
-
-            , (callback) ->
-
-                # resove player names
-                if doc.markup.PLAYER1?
-
-                    level = null
-
-                    if doc.markup.TEXT1.plain is ' deployed an '
-                        level = parseInt doc.markup.TEXT2.plain.substr(1)
-
-                    Agent.resolved doc.markup.PLAYER1.guid,
-                        name:  doc.markup.PLAYER1.plain
-                        team:  Agent.strToTeam(doc.markup.PLAYER1.team)
-                        level: level
-
-                callback()
-                
-        ], ->
-
-            callback()
-            TaskManager.end 'dbQueue.queue.callback'
+    dbQueue.push
+        id:        id
+        timestamp: timestamp
+        data:      data2
