@@ -7,12 +7,6 @@ STATUS_ERROR       = 1
 STATUS_NOTCOMPLETE = 2
 STATUS_COMPLETE    = 3
 
-request_max = 0
-request_done = 0
-
-messageCount = 0
-insertCount = 0
-
 Chat = GLOBAL.Chat =
     
     tasks: {}
@@ -46,7 +40,6 @@ Chat = GLOBAL.Chat =
 
             Chat.tasks[task._id.toString()] = task
             Chat.length++
-
             Database.db.collection('Chat._queue').insert task, callback
 
         , ->
@@ -144,14 +137,8 @@ Chat = GLOBAL.Chat =
                 return
 
             logger.info "[Broadcasts] Begin requesting..."
-
-            async.eachLimit taskList, Config.Database.MaxParallel, (taskId, callback) ->
-
-                Chat.request taskId, callback
-
-            , ->
-
-                  TaskManager.end 'Chat.start'
+            Chat.request taskList[0]
+            TaskManager.end 'Chat.start'
 
     request: (taskId, callback) ->
 
@@ -160,83 +147,39 @@ Chat = GLOBAL.Chat =
         Chat.tasks[taskId].status = STATUS_PENDING
 
         Database.db.collection('Chat._queue').update
-            _id:    new ObjectID(taskId)
-        ,
-            $set:
-                status: STATUS_PENDING
-        , (err) ->
+                _id:    new ObjectID(taskId)
+            ,
+                $set:
+                    status: STATUS_PENDING
+            , (err) ->
 
-            callback && callback()
+                Request.add
 
-            request_max++
+                    action: 'getPaginatedPlextsV2'
+                    data:   Chat.tasks[taskId].data
+                    onSuccess: (response) ->
 
-            Request.add
+                        rec = response.result[0]
+                        insertMessage rec[0], rec[1], rec[2] #for rec in response.result
 
-                action: 'getPaginatedPlextsV2'
-                data:   Chat.tasks[taskId].data
-                onSuccess: (response) ->
+                    onError: (err) ->
 
-                    parseChatResponse taskId, response.result, noop
+                        logger.error "[Broadcasts] " + err
+                        #processErrorTileResponse tileIds, noop
 
-                onError: (err) ->
+                    afterResponse: ->
 
-                    logger.error "[Broadcasts] " + err
+                        TaskManager.end 'Chat.request.callback'
+                        #checkTimeoutAndFailTiles()
 
-                    # TODO
+                        #logger.info "[Broadcasts] " +
+                        #    Math.round(Request.requested / Request.maxRequest * 100).toString() +
+                        #    "%\t[#{Request.requested}/#{Request.maxRequest}]" +
+                        #    "\t#{Entity.counter.portals} portals, #{Entity.counter.links} links, #{Entity.counter.fields} fields"
 
-                afterResponse: ->
+                    beforeRequest: ->
 
-                    request_done++
-
-                    logger.info "[Broadcasts] " +
-                        Math.round(request_done / request_max * 100).toString() +
-                        "%\t[#{request_done}/#{request_max}]" +
-                        "\t#{messageCount} messages (#{dbQueue.length()} in buffer)"
-
-                    TaskManager.end 'Chat.request.afterResponseCallback'
-
-parseChatResponse = (taskId, response, callback) ->
-
-    TaskManager.begin()
-
-    insertMessage rec[0], rec[1], rec[2] for rec in response
-    
-    if response.length < Config.Chat.FetchItemCount
-
-        delete Chat.tasks[taskId]
-        Chat.length--
-
-        # no more messages: remove task
-        Database.db.collection('Chat._queue').remove
-            _id: new ObjectID(taskId)
-        ,
-            single: true
-        , ->
-
-            callback()
-            TaskManager.end 'parseChatResponse.case1.callback'
-
-    else
-
-        # records are in descend order.
-
-        maxTimestamp = parseInt(response[response.length-1][1]) - 1
-        Chat.tasks[taskId].data.maxTimestampMs = maxTimestamp
-        Chat.tasks[taskId].status = STATUS_NOTCOMPLETE
-
-        Database.db.collection('Chat._queue').update 
-            _id: new ObjectID(taskId)
-        ,
-            $set:
-                status: STATUS_NOTCOMPLETE
-                'data.maxTimestampMs': maxTimestamp
-        , ->
-
-            # insert into queue again
-            Chat.request taskId
-
-            callback()
-            TaskManager.end 'parseChatResponse.case2.callback'
+                        null
 
 ###########################################
 # Database Queue
@@ -267,11 +210,8 @@ dbQueue = async.queue (task, callback) ->
                     name:  doc.markup.PLAYER1.plain
                     team:  Agent.strToTeam(doc.markup.PLAYER1.team)
                     level: level
-
-            callback()
             
     ], ->
-
         callback()
         TaskManager.end 'dbQueue.queue.callback'
 
@@ -280,12 +220,6 @@ dbQueue = async.queue (task, callback) ->
 insertMessage = (id, timestamp, data) ->
 
     TaskManager.begin()
-
-    if insertCount % 100 is 0
-        Database.db.collection('Chat').count {}, (err, count) ->
-            messageCount = count
-
-    insertCount++
 
     data2 = data.plext
 
