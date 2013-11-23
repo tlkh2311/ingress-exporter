@@ -134,16 +134,6 @@ tryMungeSet = (munge, callback) ->
         if not Request.processResponse error, response, body
             logger.error '[DEBUG] Unknown server response'
             return
-
-        # unknown error
-        if typeof body is 'string'
-            task.error && task.error body
-            return
-
-        # maybe 'missing version'
-        if body.error?
-            task.error && task.error body.error
-            return
         
         task.success && task.success body
 
