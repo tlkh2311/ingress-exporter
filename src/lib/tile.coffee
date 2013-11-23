@@ -4,6 +4,8 @@ timeoutTiles = []
 failTiles    = []
 panicTiles   = []
 
+ObjectID = Database.db.bson_serializer.ObjectID
+
 STATUS_PENDING      = 0
 STATUS_REQUESTING   = 1
 STATUS_TIMEOUT      = 2

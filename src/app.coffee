@@ -44,7 +44,7 @@ MungeDetector.detect ->
             Tile.prepareNew Tile.start
             taskCount++
         if argv.broadcasts
-            Chat.prepareNew Chat.start
+            Chat.PrepareNew Chat.start
             taskCount++
     else
         if argv.portals
