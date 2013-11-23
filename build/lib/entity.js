@@ -8,7 +8,7 @@
       links: 0
     },
     entityCount: 0,
-    add: function(id, timestamp, data, callback) {
+    add: function(id, timestamp, data) {
       if (Entity.entityCount % 100 === 0) {
         Database.db.collection('Portals').count({}, function(err, count) {
           return Entity.counter.portals = count;
@@ -21,7 +21,6 @@
         });
       }
       Entity.entityCount++;
-      callback = callback || noop;
       if (data.portalV2 != null) {
         return createPortalEntity.apply(this, arguments);
       } else if (data.capturedRegion != null) {
@@ -29,50 +28,32 @@
       } else if (data.edge != null) {
         return createLinkEntity.apply(this, arguments);
       } else {
-        logger.warn('Unknown entity type, id=' + id);
-        return callback();
+        return logger.warn('Unknown entity type, id=' + id);
       }
     }
   };
 
-  createEntity = function(collection, id, timestamp, data, callback) {
+  createEntity = function(collection, id, timestamp, data) {
     data.time = timestamp;
-    TaskManager.begin();
     return Database.db.collection(collection).update({
       _id: id
     }, {
       $set: data
     }, {
       upsert: true
-    }, function(err) {
-      callback && callback.apply(this, arguments);
-      return TaskManager.end();
-    });
+    }, noop);
   };
 
-  createPortalEntity = function(id, timestamp, data, callback) {
-    return createEntity('Portals', id, timestamp, data, function() {
-      var resonator, _i, _len, _ref;
-      if (data.captured != null) {
-        Agent.resolve(data.captured.capturingPlayerId);
-        _ref = data.resonatorArray.resonators;
-        for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-          resonator = _ref[_i];
-          Agent.resolved(resonator.ownerGuid, {
-            level: resonator.level
-          });
-        }
-      }
-      return callback();
-    });
+  createPortalEntity = function(id, timestamp, data) {
+    return createEntity('Portals', id, timestamp, data);
   };
 
-  createFieldEntity = function(id, timestamp, data, callback) {
-    return createEntity('Fields', id, timestamp, data, callback);
+  createFieldEntity = function(id, timestamp, data) {
+    return createEntity('Fields', id, timestamp, data);
   };
 
-  createLinkEntity = function(id, timestamp, data, callback) {
-    return createEntity('Links', id, timestamp, data, callback);
+  createLinkEntity = function(id, timestamp, data) {
+    return createEntity('Links', id, timestamp, data);
   };
 
 }).call(this);

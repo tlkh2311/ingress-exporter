@@ -7,7 +7,7 @@ Entity = GLOBAL.Entity =
 
     entityCount: 0
 
-    add: (id, timestamp, data, callback) ->
+    add: (id, timestamp, data) ->
 
         # update counter every 100 entities
 
@@ -21,8 +21,6 @@ Entity = GLOBAL.Entity =
 
         Entity.entityCount++
 
-        callback = callback || noop
-
         if data.portalV2?
             createPortalEntity.apply this, arguments
         else if data.capturedRegion?
@@ -31,13 +29,10 @@ Entity = GLOBAL.Entity =
             createLinkEntity.apply this, arguments
         else
             logger.warn 'Unknown entity type, id=' + id
-            callback()
 
-createEntity = (collection, id, timestamp, data, callback) ->
+createEntity = (collection, id, timestamp, data) ->
 
     data.time = timestamp
-
-    TaskManager.begin()
 
     Database.db.collection(collection).update
         _id: id
@@ -46,31 +41,16 @@ createEntity = (collection, id, timestamp, data, callback) ->
             data
     ,
         upsert: true
-    , (err) ->
-        
-        callback && callback.apply this, arguments
-        TaskManager.end()
+    , noop
 
-createPortalEntity = (id, timestamp, data, callback) ->
+createPortalEntity = (id, timestamp, data) ->
 
-    createEntity 'Portals', id, timestamp, data, ->
+    createEntity 'Portals', id, timestamp, data
 
-        # resolve agents
-        if data.captured?
+createFieldEntity = (id, timestamp, data) ->
 
-            Agent.resolve data.captured.capturingPlayerId
+    createEntity 'Fields', id, timestamp, data
 
-            for resonator in data.resonatorArray.resonators
-                # consider ADA Reflector/Jarvis Virus?
-                Agent.resolved resonator.ownerGuid,
-                    level: resonator.level
+createLinkEntity = (id, timestamp, data) ->
 
-        callback()
-
-createFieldEntity = (id, timestamp, data, callback) ->
-
-    createEntity 'Fields', id, timestamp, data, callback
-
-createLinkEntity = (id, timestamp, data, callback) ->
-
-    createEntity 'Links', id, timestamp, data, callback
+    createEntity 'Links', id, timestamp, data
