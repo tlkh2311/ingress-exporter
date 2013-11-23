@@ -56,14 +56,12 @@ createPortalEntity = (id, timestamp, data, callback) ->
         # resolve agents
         if data.captured?
 
-            Agent.resolve data.captured.capturingPlayerId
+            Agent.resolve data.captured.capturingPlayerId if not Utils.isSystemPlayer data.captured.capturingPlayerId
 
             for resonator in data.resonatorArray.resonators
 
                 if not Utils.isSystemPlayer resonator.ownerGuid
 
-                    Agent.resolve resonator.ownerGuid
-                    
                     # consider ADA Reflector/Jarvis Virus?
                     Agent.resolved resonator.ownerGuid,
                         level: resonator.level
